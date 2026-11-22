@@ -1,5 +1,7 @@
 # 红果 TV · Windows（Avalonia）
 
+从https://github.com/N3urda/hongguoTV安卓应用改造而来，感谢原作者！！！
+
 C# + Avalonia 11 的 Windows 客户端，复用当前 Kotlin APK 的同一套内容接口与播放链路。仅新增 `desktop/` 目录，未改动仓库其他部分。
 
 ## 结构
