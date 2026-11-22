@@ -14,6 +14,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
     private LibVLC? _libVlc;
     private MediaPlayer? _player;
     private string? _currentMediaUrl;
+    private EpisodeViewModel? _currentEpisode;
     private CancellationTokenSource _playbackLoad = new();
     private CancellationTokenSource _suggestionLoad = new();
 
@@ -42,6 +43,15 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         Episodes = new ObservableCollection<EpisodeViewModel>();
         Favorites = new ObservableCollection<SeriesViewModel>();
         History = new ObservableCollection<HistoryViewModel>();
+
+        SuggestionClickCommand = new RelayCommand(param =>
+        {
+            if (param is not string keyword) return;
+            SearchText = keyword;
+            _suggestionLoad?.Cancel();
+            Suggestions.Clear();
+            _ = SearchAsync();
+        });
 
         ShowHome();
         _ = LoadHomeAsync();
@@ -116,6 +126,9 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
     private bool _playerVisible;
     public bool PlayerVisible { get => _playerVisible; set => SetProperty(ref _playerVisible, value); }
 
+    private bool _autoPlay = true;
+    public bool AutoPlay { get => _autoPlay; set => SetProperty(ref _autoPlay, value); }
+
     private string _quality = "自动";
     public string Quality { get => _quality; set => SetProperty(ref _quality, value); }
 
@@ -131,7 +144,31 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
     }
 
     private int _maxQuality = 1080;
-    public int MaxQuality { get => _maxQuality; set => SetProperty(ref _maxQuality, value); }
+    public int MaxQuality { get => _maxQuality; private set => SetProperty(ref _maxQuality, value); }
+
+    private int _maxQualityIndex = 2;
+    public int MaxQualityIndex
+    {
+        get => _maxQualityIndex;
+        set
+        {
+            if (!SetProperty(ref _maxQualityIndex, value)) return;
+            MaxQuality = value switch { 0 => 480, 1 => 720, 2 => 1080, 3 => 2160, _ => 1080 };
+            if (_currentEpisode is not null && PlayerVisible)
+                _ = PlayEpisodeAsync(_currentEpisode);
+        }
+    }
+
+    private int _speedIndex = 1;
+    public int SpeedIndex
+    {
+        get => _speedIndex;
+        set
+        {
+            if (!SetProperty(ref _speedIndex, value)) return;
+            Speed = value switch { 0 => 0.75f, 1 => 1f, 2 => 1.25f, 3 => 1.5f, 4 => 2f, _ => 1f };
+        }
+    }
 
     public MediaPlayer? Player => _player;
 
@@ -141,6 +178,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
     public ICommand HistoryCommand { get; }
     public ICommand BackCommand { get; }
     public ICommand SearchNowCommand { get; }
+    public ICommand SuggestionClickCommand { get; }
     public ICommand LoadMoreCommand { get; }
     public ICommand ToggleFavoriteCommand { get; }
     public ICommand PlayPauseCommand { get; }
@@ -268,7 +306,18 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         _player = new MediaPlayer(_libVlc);
         _player.Playing += (_, _) => Dispatcher.UIThread.Post(() => IsPlaying = true);
         _player.Paused += (_, _) => Dispatcher.UIThread.Post(() => IsPlaying = false);
-        _player.EndReached += (_, _) => Dispatcher.UIThread.Post(() => IsPlaying = false);
+        _player.EndReached += (_, _) => Dispatcher.UIThread.Post(OnEpisodeEnded);
+    }
+
+    private void OnEpisodeEnded()
+    {
+        IsPlaying = false;
+        if (!AutoPlay || _currentEpisode is null) return;
+        var index = Episodes.IndexOf(_currentEpisode);
+        if (index < 0 || index + 1 >= Episodes.Count) return;
+        var next = Episodes[index + 1];
+        Status = $"自动播放 {next.Label}…";
+        _ = PlayEpisodeAsync(next);
     }
 
     private async Task PlayEpisodeAsync(EpisodeViewModel episode)
@@ -289,6 +338,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
             Quality = rendition.Quality > 0 ? $"{rendition.Quality}P" : "自动";
             using var media = new Media(_libVlc!, new Uri(url));
             _player!.Play(media);
+            _currentEpisode = episode;
             PlayerVisible = true;
             foreach (var item in Episodes) item.Playing = false;
             episode.Playing = true;
@@ -309,6 +359,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
 
     private void StopPlayback()
     {
+        _currentEpisode = null;
         _player?.Stop();
         if (!string.IsNullOrWhiteSpace(_currentMediaUrl)) _mediaServer.Unmount(_currentMediaUrl);
         _currentMediaUrl = null;
