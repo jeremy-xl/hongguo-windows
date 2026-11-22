@@ -12,6 +12,20 @@
     <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
 
+  <!--
+    VideoLAN.LibVLC.Windows 默认在 Platform=AnyCPU 时会把 x64 / x86 / arm64 三套原生文件
+    全部复制到输出目录（约 300MB）。这里只保留 Windows 客户端实际需要的架构：
+      - 默认只复制 win-x64（输出体积 -193MB）
+      - 需要其它架构时显式指定 /p:RuntimeIdentifier=win-x86 或 win-arm64
+  -->
+  <PropertyGroup>
+    <VlcWindowsX64Enabled Condition="'$(VlcWindowsX64Enabled)' == ''">true</VlcWindowsX64Enabled>
+    <VlcWindowsX86Enabled Condition="'$(VlcWindowsX86Enabled)' == ''">false</VlcWindowsX86Enabled>
+    <VlcWindowsArm64Enabled Condition="'$(VlcWindowsArm64Enabled)' == ''">false</VlcWindowsArm64Enabled>
+    <VlcWindowsX86Enabled Condition="'$(RuntimeIdentifier)' == 'win-x86'">true</VlcWindowsX86Enabled>
+    <VlcWindowsArm64Enabled Condition="'$(RuntimeIdentifier)' == 'win-arm64'">true</VlcWindowsArm64Enabled>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.1.6" />
     <PackageReference Include="Avalonia.Desktop" Version="12.1.6" />
