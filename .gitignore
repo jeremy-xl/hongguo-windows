@@ -1,0 +1,17 @@
+# Build output
+bin/
+obj/
+publish/
+
+# IDE
+.vs/
+.idea/
+*.user
+*.suo
+
+# Local runtime logs
+app.stdout.log
+app.stderr.log
+
+# Temporary probe projects
+.probe/
