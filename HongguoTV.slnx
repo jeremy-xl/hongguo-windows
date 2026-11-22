@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/HongguoTV.Core/HongguoTV.Core.csproj" />
+    <Project Path="src/HongguoTV.Desktop/HongguoTV.Desktop.csproj" />
+  </Folder>
+</Solution>

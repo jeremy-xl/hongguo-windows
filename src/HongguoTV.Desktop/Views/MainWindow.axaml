@@ -1,0 +1,168 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:HongguoTV.Desktop.ViewModels"
+        xmlns:core="using:HongguoTV.Core"
+        xmlns:views="using:HongguoTV.Desktop.Views"
+        xmlns:vlc="clr-namespace:LibVLCSharp.Avalonia;assembly=LibVLCSharp.Avalonia"
+        x:Class="HongguoTV.Desktop.Views.MainWindow"
+        x:FieldModifier="public"
+        Title="红果 TV · Windows" Width="1280" Height="780" MinWidth="960" MinHeight="600"
+        Background="#0E141D" Foreground="#E6EDF3">
+    <Window.Resources>
+        <DataTemplate x:Key="SeriesCard" DataType="vm:SeriesViewModel">
+            <Button Background="Transparent" BorderThickness="0" Padding="0"
+                    Command="{Binding OpenCommand}" Cursor="Hand" Width="176">
+                <Border Classes="card" ClipToBounds="True">
+                    <StackPanel>
+                        <views:AsyncImage Url="{Binding Cover}" Height="228" Stretch="UniformToFill" />
+                        <StackPanel Margin="10,8,10,12">
+                            <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="SemiBold"
+                                       TextWrapping="Wrap" MaxLines="2" Height="36" />
+                            <TextBlock Text="{Binding Badge}" FontSize="11" Foreground="#8B98A9"
+                                       Margin="0,4,0,0" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </Button>
+        </DataTemplate>
+    </Window.Resources>
+
+    <Grid RowDefinitions="Auto,Auto,*,Auto">
+        <vlc:VideoView x:Name="PlayerView" Grid.Row="2" IsVisible="{Binding PlayerVisible}" />
+        <Border Grid.Row="0" Background="#141C27" Padding="22,14">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                    <TextBlock Text="红果 TV" FontSize="20" FontWeight="Bold" Foreground="#FF6B6B" />
+                    <TextBlock Text="Windows" FontSize="12" Foreground="#7D8B9B" VerticalAlignment="Bottom" Margin="0,0,0,2" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="6">
+                    <Button Classes="nav" Content="推荐" Command="{Binding HomeCommand}" />
+                    <Button Classes="nav" Content="搜索" Command="{Binding SearchCommand}" />
+                    <Button Classes="nav" Content="收藏" Command="{Binding FavoritesCommand}" />
+                    <Button Classes="nav" Content="历史" Command="{Binding HistoryCommand}" />
+                </StackPanel>
+                <TextBlock Grid.Column="2" Text="{Binding Status}" FontSize="11" Foreground="#7D8B9B"
+                           VerticalAlignment="Center" MaxWidth="280" TextTrimming="CharacterEllipsis" />
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="1" Background="#0E141D" Padding="22,12,22,0" IsVisible="{Binding DetailOpen}">
+            <Button Classes="nav" Content="← 返回" Command="{Binding BackCommand}" />
+        </Border>
+
+        <Grid Grid.Row="2" Margin="22,8,22,12">
+            <ScrollViewer IsVisible="{Binding !DetailOpen}" VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <StackPanel IsVisible="{Binding Page, Converter={x:Static vm:PageConverters.IsSearch}}">
+                        <TextBox Classes="search" Text="{Binding SearchText}" Watermark="输入剧名搜索，支持联想词"
+                                 Height="44" Margin="0,8,0,0" />
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0" Spacing="8">
+                            <Button Content="搜索" Command="{Binding SearchNowCommand}" Width="88" Background="#E5484D" />
+                        </StackPanel>
+                        <ItemsControl ItemsSource="{Binding Suggestions}" Margin="0,10,0,0">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button Content="{Binding}" Margin="0,0,8,8" Padding="10,5" FontSize="12"
+                                            Background="#18212E" Foreground="#B9C4D1" CornerRadius="14" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Classes="section" Text="搜索结果" />
+                    </StackPanel>
+
+                    <TextBlock Classes="section" Text="热门推荐" IsVisible="{Binding Page, Converter={x:Static vm:PageConverters.IsHome}}" />
+                    <TextBlock Classes="section" Text="我的收藏" IsVisible="{Binding Page, Converter={x:Static vm:PageConverters.IsFavorites}}" />
+                    <TextBlock Classes="section" Text="观看历史" IsVisible="{Binding Page, Converter={x:Static vm:PageConverters.IsHistory}}" />
+
+                    <ItemsControl ItemsSource="{Binding HomeItems}" IsVisible="{Binding Page, Converter={x:Static vm:PageConverters.IsHome}}">
+                        <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate><DataTemplate><ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource SeriesCard}" /></DataTemplate></ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <ItemsControl ItemsSource="{Binding SearchItems}" IsVisible="{Binding Page, Converter={x:Static vm:PageConverters.IsSearch}}">
+                        <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate><DataTemplate><ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource SeriesCard}" /></DataTemplate></ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <ItemsControl ItemsSource="{Binding Favorites}" IsVisible="{Binding Page, Converter={x:Static vm:PageConverters.IsFavorites}}">
+                        <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate><DataTemplate><ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource SeriesCard}" /></DataTemplate></ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <ItemsControl ItemsSource="{Binding History}" IsVisible="{Binding Page, Converter={x:Static vm:PageConverters.IsHistory}}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="core:HistoryItem">
+                                <Border Classes="card" Padding="12" Margin="0,0,0,8">
+                                    <TextBlock Text="{Binding Title}" FontSize="14" />
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Button Content="加载更多" Command="{Binding LoadMoreCommand}" Margin="0,16,0,0" HorizontalAlignment="Center"
+                            IsVisible="{Binding Page, Converter={x:Static vm:PageConverters.IsPaged}}" />
+                </StackPanel>
+            </ScrollViewer>
+
+            <Grid IsVisible="{Binding DetailOpen}" ColumnDefinitions="230,*">
+                <StackPanel Margin="0,0,18,0">
+                    <views:AsyncImage Url="{Binding Cover}" Height="306" Stretch="UniformToFill" />
+                    <Button Content="{Binding IsFavorite, Converter={x:Static vm:PageConverters.FavoriteText}}"
+                            Command="{Binding ToggleFavoriteCommand}" Margin="0,12,0,0" HorizontalAlignment="Stretch" />
+                </StackPanel>
+                <Grid RowDefinitions="Auto,Auto,*">
+                    <StackPanel>
+                        <TextBlock Classes="title" Text="{Binding Title}" TextWrapping="Wrap" />
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0" Spacing="10">
+                            <TextBlock Text="{Binding Badge}" Foreground="#FF8A8A" FontSize="12" IsVisible="{Binding Badge.Length}" />
+                            <TextBlock Text="{Binding Tags}" Foreground="#8B98A9" FontSize="12" TextWrapping="Wrap" />
+                        </StackPanel>
+                        <TextBlock Text="{Binding Description}" Foreground="#9BA8B8" FontSize="12"
+                                   TextWrapping="Wrap" Margin="0,10,0,0" MaxHeight="68" />
+                    </StackPanel>
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,14,0,8" Spacing="10">
+                        <TextBlock Classes="section" Text="选集" Margin="0" />
+                        <TextBlock Text="最高清晰度" Foreground="#7D8B9B" FontSize="12" VerticalAlignment="Center" />
+                        <ComboBox SelectedValue="{Binding MaxQuality}" Width="110" FontSize="12">
+                            <ComboBoxItem Content="480P" Tag="480" />
+                            <ComboBoxItem Content="720P" Tag="720" />
+                            <ComboBoxItem Content="1080P" Tag="1080" IsSelected="True" />
+                            <ComboBoxItem Content="2160P" Tag="2160" />
+                        </ComboBox>
+                        <TextBlock Text="倍速" Foreground="#7D8B9B" FontSize="12" VerticalAlignment="Center" />
+                        <ComboBox SelectedValue="{Binding Speed}" Width="80" FontSize="12">
+                            <ComboBoxItem Content="0.75x" Tag="0.75" />
+                            <ComboBoxItem Content="1.0x" Tag="1" IsSelected="True" />
+                            <ComboBoxItem Content="1.25x" Tag="1.25" />
+                            <ComboBoxItem Content="1.5x" Tag="1.5" />
+                            <ComboBoxItem Content="2.0x" Tag="2" />
+                        </ComboBox>
+                    </StackPanel>
+                    <ScrollViewer Grid.Row="2">
+                        <ItemsControl ItemsSource="{Binding Episodes}">
+                            <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="vm:EpisodeViewModel">
+                                    <Button Content="{Binding Label}" Command="{Binding PlayCommand}" Width="72" Margin="0,0,8,8"
+                                            Background="{Binding Playing, Converter={x:Static vm:PageConverters.PlayingBackground}}"
+                                            Foreground="#DCE4EE" CornerRadius="8" FontSize="12" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+            </Grid>
+        </Grid>
+
+        <Border Grid.Row="3" Background="#141C27" Padding="16,10" IsVisible="{Binding PlayerVisible}">
+            <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto">
+                <TextBlock Text="播放" Foreground="#8B98A9" VerticalAlignment="Center" Margin="0,0,12,0" />
+                <Button Grid.Column="1" Content="{Binding IsPlaying, Converter={x:Static vm:PageConverters.PlayText}}"
+                        Command="{Binding PlayPauseCommand}" Width="90" />
+                <Button Grid.Column="2" Content="停止" Command="{Binding StopCommand}" Width="70" Margin="8,0,0,0" />
+                <TextBlock Grid.Column="3" Text="{Binding Quality}" Foreground="#8B98A9" VerticalAlignment="Center" Margin="16,0,0,0" />
+                <TextBlock Grid.Column="4" Text="{Binding Speed, StringFormat={}{0:0.00}x}" Foreground="#8B98A9" VerticalAlignment="Center" Margin="12,0,0,0" />
+                <TextBlock Grid.Column="5" Text="LibVLC" Foreground="#5F6B7A" VerticalAlignment="Center" Margin="16,0,0,0" />
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
