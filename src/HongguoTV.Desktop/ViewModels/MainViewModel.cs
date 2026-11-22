@@ -24,6 +24,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         _mediaServer = new LocalMediaServer(_repository);
         _mediaServer.Start();
         _library = new LibraryStore();
+        _useGpuDecode = _library.UseGpuDecode;
         InitializePlayer();
 
         HomeCommand = new RelayCommand(_ => ShowHome());
@@ -36,6 +37,8 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         ToggleFavoriteCommand = new RelayCommand(_ => ToggleFavorite());
         PlayPauseCommand = new RelayCommand(_ => TogglePlayPause());
         StopCommand = new RelayCommand(_ => StopPlayback());
+        SettingsCommand = new RelayCommand(_ => SettingsOpen = true);
+        CloseSettingsCommand = new RelayCommand(_ => SettingsOpen = false);
 
         HomeItems = new ObservableCollection<SeriesViewModel>();
         SearchItems = new ObservableCollection<SeriesViewModel>();
@@ -172,6 +175,29 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
 
     public MediaPlayer? Player => _player;
 
+    private bool _settingsOpen;
+    public bool SettingsOpen { get => _settingsOpen; set => SetProperty(ref _settingsOpen, value); }
+
+    private bool _useGpuDecode = true;
+    /// <summary>true = GPU 硬件解码（D3D11VA）；false = CPU 软件解码。</summary>
+    public bool UseGpuDecode
+    {
+        get => _useGpuDecode;
+        set
+        {
+            if (!SetProperty(ref _useGpuDecode, value)) return;
+            OnPropertyChanged(nameof(UseCpuDecode));
+            _library.SetUseGpuDecode(value);
+            Status = value ? "已切换为 GPU 硬件解码，下次播放生效" : "已切换为 CPU 软件解码，下次播放生效";
+        }
+    }
+
+    public bool UseCpuDecode
+    {
+        get => !_useGpuDecode;
+        set { if (value) UseGpuDecode = false; }
+    }
+
     public ICommand HomeCommand { get; }
     public ICommand SearchCommand { get; }
     public ICommand FavoritesCommand { get; }
@@ -183,6 +209,8 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
     public ICommand ToggleFavoriteCommand { get; }
     public ICommand PlayPauseCommand { get; }
     public ICommand StopCommand { get; }
+    public ICommand SettingsCommand { get; }
+    public ICommand CloseSettingsCommand { get; }
 
     private SeriesViewModel? _selected;
     public SeriesViewModel? Selected
@@ -295,14 +323,15 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
     {
         if (_libVlc is not null) return;
         LibVLCSharp.Shared.Core.Initialize();
+        // 注意：解码方式不能用 LibVLC 构造参数控制（--avcodec-hw 传给 libvlc_new 后
+        // 不会被 avcodec 模块继承），必须用 Media 选项，见 PlayEpisodeAsync。
         _libVlc = new LibVLC(
             "--no-video-title-show",
             "--network-caching=4000",
             "--clock-jitter=0",
             "--clock-synchro=0",
             "--no-drop-late-frames",
-            "--no-skip-frames",
-            "--avcodec-hw=none");
+            "--no-skip-frames");
         _player = new MediaPlayer(_libVlc);
         _player.Playing += (_, _) => Dispatcher.UIThread.Post(() => IsPlaying = true);
         _player.Paused += (_, _) => Dispatcher.UIThread.Post(() => IsPlaying = false);
@@ -337,6 +366,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
             _currentMediaUrl = url;
             Quality = rendition.Quality > 0 ? $"{rendition.Quality}P" : "自动";
             using var media = new Media(_libVlc!, new Uri(url));
+            if (!UseGpuDecode) media.AddOption(":avcodec-hw=none");
             _player!.Play(media);
             _currentEpisode = episode;
             PlayerVisible = true;

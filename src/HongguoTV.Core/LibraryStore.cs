@@ -11,6 +11,13 @@ public sealed class LibraryData
 {
     public List<Favorite> Favorites { get; set; } = new();
     public List<HistoryItem> History { get; set; } = new();
+    public AppSettings Settings { get; set; } = new();
+}
+
+public sealed class AppSettings
+{
+    /// <summary>true = GPU 硬件解码（D3D11VA）；false = CPU 软件解码。</summary>
+    public bool UseGpuDecode { get; set; } = true;
 }
 
 [JsonSerializable(typeof(LibraryData))]
@@ -55,6 +62,18 @@ public sealed class LibraryStore
 
     public IReadOnlyList<Favorite> Favorites { get { lock (_lock) return _data.Favorites.ToList(); } }
     public IReadOnlyList<HistoryItem> History { get { lock (_lock) return _data.History.OrderByDescending(h => h.UpdatedAt).ToList(); } }
+
+    public bool UseGpuDecode { get { lock (_lock) return _data.Settings.UseGpuDecode; } }
+
+    public void SetUseGpuDecode(bool value)
+    {
+        lock (_lock)
+        {
+            if (_data.Settings.UseGpuDecode == value) return;
+            _data.Settings.UseGpuDecode = value;
+            Save();
+        }
+    }
 
     public bool IsFavorite(string id) { lock (_lock) return _data.Favorites.Any(f => f.Id == id); }
 

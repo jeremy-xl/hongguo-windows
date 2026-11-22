@@ -16,6 +16,7 @@
         <StreamGeometry x:Key="IconNavSearch">M 11,4.5 A 6.5,6.5 0 1 0 11,17.5 A 6.5,6.5 0 1 0 11,4.5 M 15.6,15.6 L 20,20</StreamGeometry>
         <StreamGeometry x:Key="IconNavStar">M 12,3.5 L 14.7,9.2 L 21,10.1 L 16.5,14.5 L 17.6,20.8 L 12,17.9 L 6.4,20.8 L 7.5,14.5 L 3,10.1 L 9.3,9.2 Z</StreamGeometry>
         <StreamGeometry x:Key="IconNavHistory">M 12,3.5 A 8.5,8.5 0 1 0 11.999,3.5 M 12,7.5 L 12,12.2 L 16,14.5</StreamGeometry>
+        <StreamGeometry x:Key="IconNavSettings">M 3.5,7 L 20.5,7 M 14.8,4.6 L 14.8,9.4 M 3.5,12 L 20.5,12 M 9,9.6 L 9,14.4 M 3.5,17 L 20.5,17 M 17,14.6 L 17,19.4</StreamGeometry>
     </Application.Resources>
     <Application.Styles>
         <FluentTheme />

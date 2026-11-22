@@ -87,6 +87,15 @@
                             <TextBlock Text="历史" FontSize="15" VerticalAlignment="Center" />
                         </StackPanel>
                     </Button>
+                    <Button Classes="nav" Command="{Binding SettingsCommand}" Padding="14,7" Cursor="Hand"
+                            ToolTip.Tip="设置">
+                        <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
+                            <Path Data="{StaticResource IconNavSettings}" Stroke="#D8DEE9" StrokeThickness="1.7"
+                                  StrokeLineCap="Round" StrokeJoin="Round" Width="17" Height="17"
+                                  Stretch="Uniform" VerticalAlignment="Center" />
+                            <TextBlock Text="设置" FontSize="15" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Spacing="4">
                     <TextBlock Text="{Binding Status}" FontSize="11" Foreground="#7D8B9B"
@@ -247,5 +256,35 @@
                 </Border>
             </Grid>
         </Grid>
+
+        <!-- 设置对话框（应用内遮罩层） -->
+        <Border Grid.Row="0" Grid.RowSpan="3" ZIndex="100" Background="#B3000000"
+                IsVisible="{Binding SettingsOpen}">
+            <Border Background="#161F2B" BorderBrush="#2A3546" BorderThickness="1" CornerRadius="14"
+                    Width="460" Padding="26" VerticalAlignment="Center" HorizontalAlignment="Center">
+                <StackPanel Spacing="16">
+                    <TextBlock Text="设置" FontSize="18" FontWeight="Bold" />
+                    <Border Height="1" Background="#2A3546" />
+                    <TextBlock Text="视频解码" FontSize="13" Foreground="#8B98A9" />
+                    <RadioButton GroupName="DecodeMode" IsChecked="{Binding UseGpuDecode}" Foreground="#D8DEE9">
+                        <StackPanel Spacing="2">
+                            <TextBlock Text="GPU 硬件解码（D3D11VA）" FontSize="13" />
+                            <TextBlock Text="占用 CPU 少，默认选项。老显卡解 1080P HEVC 可能花屏或卡顿。"
+                                       FontSize="11" Foreground="#7D8B9B" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </RadioButton>
+                    <RadioButton GroupName="DecodeMode" IsChecked="{Binding UseCpuDecode}" Foreground="#D8DEE9">
+                        <StackPanel Spacing="2">
+                            <TextBlock Text="CPU 软件解码" FontSize="13" />
+                            <TextBlock Text="兼容性最好，画面异常时改用它；高分辨率对 CPU 要求较高。"
+                                       FontSize="11" Foreground="#7D8B9B" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </RadioButton>
+                    <TextBlock Text="解码方式在下一次开始播放时生效。" FontSize="11" Foreground="#5F6B7A" />
+                    <Button Content="完成" Command="{Binding CloseSettingsCommand}" Width="92"
+                            HorizontalAlignment="Right" Background="#E5484D" Foreground="#FFFFFF" />
+                </StackPanel>
+            </Border>
+        </Border>
     </Grid>
 </Window>
