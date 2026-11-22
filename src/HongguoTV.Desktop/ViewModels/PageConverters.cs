@@ -16,4 +16,5 @@ public static class PageConverters
 
     public static readonly IValueConverter PlayingBackground = new FuncValueConverter<bool, IBrush>(v =>
         v ? new SolidColorBrush(Color.Parse("#E5484D")) : new SolidColorBrush(Color.Parse("#1C2431")));
+
 }

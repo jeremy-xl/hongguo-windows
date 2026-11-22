@@ -21,13 +21,14 @@ internal sealed class HttpTransport : IDisposable
         };
         _client = new HttpClient(_handler) { Timeout = timeout ?? TimeSpan.FromSeconds(20) };
         _client.DefaultRequestHeaders.Add("Accept-Language", "zh-CN,zh;q=0.9");
+        _client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36");
     }
 
     public async Task<(string Text, HttpStatusCode Status, IReadOnlyList<string> SetCookies)> GetTextAsync(
         string url, IEnumerable<KeyValuePair<string, string>>? headers = null, CancellationToken ct = default)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
-        AddHeaders(request, headers);
+        AddHeaders(request, headers, url);
         using var response = await _client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
         var text = await ReadLimitedAsync(response, ct);
         return (text, response.StatusCode, response.Headers.TryGetValues("Set-Cookie", out var cookies) ? cookies.ToList() : new List<string>());
@@ -38,12 +39,12 @@ internal sealed class HttpTransport : IDisposable
         byte[]? body = null, string? contentType = null, CancellationToken ct = default)
     {
         using var request = new HttpRequestMessage(method, url);
-        AddHeaders(request, headers);
         if (body is not null)
         {
             request.Content = new ByteArrayContent(body);
             request.Content.Headers.ContentType = MediaTypeHeaderValue.Parse(contentType ?? "application/json; charset=utf-8");
         }
+        AddHeaders(request, headers, url);
         using var response = await _client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
         var text = await ReadLimitedAsync(response, ct);
         return (text, response.StatusCode, response.Headers.TryGetValues("Set-Cookie", out var cookies) ? cookies.ToList() : new List<string>());
@@ -67,14 +68,42 @@ internal sealed class HttpTransport : IDisposable
         return buffer.ToArray();
     }
 
-    private static void AddHeaders(HttpRequestMessage request, IEnumerable<KeyValuePair<string, string>>? headers)
+    private static void AddHeaders(HttpRequestMessage request, IEnumerable<KeyValuePair<string, string>>? headers, string url)
     {
-        if (headers is null) return;
-        foreach (var (key, value) in headers)
+        var provided = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (headers is not null)
         {
-            if (string.Equals(key, "Content-Type", StringComparison.OrdinalIgnoreCase)) continue;
-            request.Headers.TryAddWithoutValidation(key, value);
+            foreach (var (key, value) in headers)
+            {
+                if (string.Equals(key, "Content-Type", StringComparison.OrdinalIgnoreCase)) continue;
+                provided.Add(key);
+                if (IsContentHeader(key))
+                {
+                    if (request.Content is null) continue;
+                    request.Content.Headers.Remove(key);
+                    request.Content.Headers.TryAddWithoutValidation(key, value);
+                }
+                else SetHeader(request, key, value);
+            }
         }
+        if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Host == "hongguoduanju.com" && !provided.Contains("Referer"))
+            SetHeader(request, "Referer", "https://hongguoduanju.com/");
+    }
+
+    private static bool IsContentHeader(string key) =>
+        key.Equals("Content-Encoding", StringComparison.OrdinalIgnoreCase)
+        || key.Equals("Content-Language", StringComparison.OrdinalIgnoreCase)
+        || key.Equals("Content-Length", StringComparison.OrdinalIgnoreCase)
+        || key.Equals("Content-Location", StringComparison.OrdinalIgnoreCase)
+        || key.Equals("Content-MD5", StringComparison.OrdinalIgnoreCase)
+        || key.Equals("Content-Range", StringComparison.OrdinalIgnoreCase)
+        || key.Equals("Expires", StringComparison.OrdinalIgnoreCase)
+        || key.Equals("Last-Modified", StringComparison.OrdinalIgnoreCase);
+
+    private static void SetHeader(HttpRequestMessage request, string key, string value)
+    {
+        request.Headers.Remove(key);
+        request.Headers.TryAddWithoutValidation(key, value);
     }
 
     private static async Task<string> ReadLimitedAsync(HttpResponseMessage response, CancellationToken ct)

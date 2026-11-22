@@ -41,7 +41,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         Suggestions = new ObservableCollection<string>();
         Episodes = new ObservableCollection<EpisodeViewModel>();
         Favorites = new ObservableCollection<SeriesViewModel>();
-        History = new ObservableCollection<HistoryItem>();
+        History = new ObservableCollection<HistoryViewModel>();
 
         ShowHome();
         _ = LoadHomeAsync();
@@ -53,7 +53,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
     public ObservableCollection<string> Suggestions { get; }
     public ObservableCollection<EpisodeViewModel> Episodes { get; }
     public ObservableCollection<SeriesViewModel> Favorites { get; }
-    public ObservableCollection<HistoryItem> History { get; }
+    public ObservableCollection<HistoryViewModel> History { get; }
 
     private string _page = "home";
     public string Page { get => _page; set => SetProperty(ref _page, value); }
@@ -257,7 +257,14 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
     {
         if (_libVlc is not null) return;
         LibVLCSharp.Shared.Core.Initialize();
-        _libVlc = new LibVLC("--no-video-title-show", "--network-caching=1500");
+        _libVlc = new LibVLC(
+            "--no-video-title-show",
+            "--network-caching=1500",
+            "--clock-jitter=0",
+            "--clock-synchro=0",
+            "--no-drop-late-frames",
+            "--no-skip-frames",
+            "--avcodec-hw=none");
         _player = new MediaPlayer(_libVlc);
         _player.Playing += (_, _) => Dispatcher.UIThread.Post(() => IsPlaying = true);
         _player.Paused += (_, _) => Dispatcher.UIThread.Post(() => IsPlaying = false);
@@ -325,7 +332,9 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
             foreach (var f in _library.Favorites)
                 Favorites.Add(new SeriesViewModel(f.Id, f.Title, f.Cover, "", "", _ => { }));
             History.Clear();
-            foreach (var h in _library.History) History.Add(h);
+            foreach (var h in _library.History)
+                History.Add(new HistoryViewModel(h, item =>
+                    Selected = new SeriesViewModel(item.Id, item.Title, item.Cover, "", "", _ => { })));
         });
     }
 

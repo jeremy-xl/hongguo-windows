@@ -58,6 +58,21 @@ public sealed class SeriesViewModel : ViewModelBase
     public ICommand OpenCommand { get; }
 }
 
+public sealed class HistoryViewModel : ViewModelBase
+{
+    public HistoryViewModel(Core.HistoryItem item, Action<Core.HistoryItem> open)
+    {
+        Item = item;
+        OpenCommand = new RelayCommand(_ => open(item));
+    }
+
+    public Core.HistoryItem Item { get; }
+    public string Title => Item.Title;
+    public string Cover => Item.Cover;
+    public string Progress => $"看到第 {Item.EpisodeIndex + 1} 集";
+    public ICommand OpenCommand { get; }
+}
+
 public sealed class EpisodeViewModel : ViewModelBase
 {
     private bool _playing;
