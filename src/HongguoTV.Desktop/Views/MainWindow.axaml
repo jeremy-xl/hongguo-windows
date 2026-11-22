@@ -8,6 +8,7 @@
         x:DataType="vm:MainViewModel"
         x:FieldModifier="public"
         Title="红果 TV · Windows" Width="1280" Height="780" MinWidth="960" MinHeight="600"
+        Icon="/Assets/app.ico"
         Background="#0E141D" Foreground="#E6EDF3"
         ExtendClientAreaToDecorationsHint="True"
         WindowDecorations="None">
@@ -54,10 +55,38 @@
                     <TextBlock Text="Windows" FontSize="12" Foreground="#7D8B9B" VerticalAlignment="Bottom" Margin="0,0,0,2" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="6">
-                    <Button Classes="nav" Content="推荐" Command="{Binding HomeCommand}" />
-                    <Button Classes="nav" Content="搜索" Command="{Binding SearchCommand}" />
-                    <Button Classes="nav" Content="收藏" Command="{Binding FavoritesCommand}" />
-                    <Button Classes="nav" Content="历史" Command="{Binding HistoryCommand}" />
+                    <Button Classes="nav" Command="{Binding HomeCommand}" Padding="14,7" Cursor="Hand">
+                        <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
+                            <Path Data="{StaticResource IconNavHome}" Stroke="#D8DEE9" StrokeThickness="1.7"
+                                  StrokeLineCap="Round" StrokeJoin="Round" Width="17" Height="17"
+                                  Stretch="Uniform" VerticalAlignment="Center" />
+                            <TextBlock Text="推荐" FontSize="15" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button Classes="nav" Command="{Binding SearchCommand}" Padding="14,7" Cursor="Hand">
+                        <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
+                            <Path Data="{StaticResource IconNavSearch}" Stroke="#D8DEE9" StrokeThickness="1.7"
+                                  StrokeLineCap="Round" StrokeJoin="Round" Width="17" Height="17"
+                                  Stretch="Uniform" VerticalAlignment="Center" />
+                            <TextBlock Text="搜索" FontSize="15" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button Classes="nav" Command="{Binding FavoritesCommand}" Padding="14,7" Cursor="Hand">
+                        <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
+                            <Path Data="{StaticResource IconNavStar}" Stroke="#D8DEE9" StrokeThickness="1.7"
+                                  StrokeLineCap="Round" StrokeJoin="Round" Width="17" Height="17"
+                                  Stretch="Uniform" VerticalAlignment="Center" />
+                            <TextBlock Text="收藏" FontSize="15" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button Classes="nav" Command="{Binding HistoryCommand}" Padding="14,7" Cursor="Hand">
+                        <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
+                            <Path Data="{StaticResource IconNavHistory}" Stroke="#D8DEE9" StrokeThickness="1.7"
+                                  StrokeLineCap="Round" StrokeJoin="Round" Width="17" Height="17"
+                                  Stretch="Uniform" VerticalAlignment="Center" />
+                            <TextBlock Text="历史" FontSize="15" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Spacing="4">
                     <TextBlock Text="{Binding Status}" FontSize="11" Foreground="#7D8B9B"

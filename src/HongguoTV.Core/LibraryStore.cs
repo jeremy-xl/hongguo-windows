@@ -13,15 +13,17 @@ public sealed class LibraryData
     public List<HistoryItem> History { get; set; } = new();
 }
 
+[JsonSerializable(typeof(LibraryData))]
+[JsonSourceGenerationOptions(
+    WriteIndented = true,
+    PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
+    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
+internal sealed partial class LibraryJsonContext : JsonSerializerContext
+{
+}
+
 public sealed class LibraryStore
 {
-    private static readonly JsonSerializerOptions Options = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-    };
-
     private readonly string _path;
     private readonly object _lock = new();
     private LibraryData _data;
@@ -39,7 +41,7 @@ public sealed class LibraryStore
         try
         {
             if (File.Exists(_path))
-                return JsonSerializer.Deserialize<LibraryData>(File.ReadAllText(_path), Options) ?? new LibraryData();
+                return JsonSerializer.Deserialize(File.ReadAllText(_path), LibraryJsonContext.Default.LibraryData) ?? new LibraryData();
         }
         catch { }
         return new LibraryData();
@@ -47,7 +49,7 @@ public sealed class LibraryStore
 
     private void Save()
     {
-        try { File.WriteAllText(_path, JsonSerializer.Serialize(_data, Options)); }
+        try { File.WriteAllText(_path, JsonSerializer.Serialize(_data, LibraryJsonContext.Default.LibraryData)); }
         catch { }
     }
 

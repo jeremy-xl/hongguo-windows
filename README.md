@@ -19,7 +19,23 @@ dotnet build desktop/HongguoTV.slnx
 dotnet run --project desktop/src/HongguoTV.Desktop/HongguoTV.Desktop.csproj
 ```
 
-需要 .NET 8 SDK。首次运行会自动从 NuGet 还原 Avalonia、LibVLCSharp 与 VideoLAN.LibVLC.Windows。
+需要 .NET 10 SDK。首次运行会自动从 NuGet 还原 Avalonia 12、LibVLCSharp 与 VideoLAN.LibVLC.Windows。
+
+### Native AOT 发布
+
+项目已启用 `<PublishAot>true</PublishAot>`，可直接发布为原生 exe（无需目标机安装 .NET 运行时）：
+
+```powershell
+dotnet publish desktop/src/HongguoTV.Desktop/HongguoTV.Desktop.csproj -c Release -r win-x64
+```
+
+产物在 `bin/Release/net10.0/win-x64/publish/`：主程序约 25 MB 原生单文件，附带 3 个托管 DLL 和 `libvlc/` 原生库目录。总大小约 530 MB，绝大部分是 LibVLC 的全量解码器插件（956 个 DLL），可按需裁剪 `libvlc/plugins`。
+
+AOT 注意事项：
+- 发布机需要 C++ 工具链（MSVC linker），即已安装 Visual Studio Build Tools 的“使用 C++ 的桌面开发”组件
+- 本地收藏/历史已改用 `JsonSerializerContext` 源生成器，避免 AOT 下的反射序列化被裁剪（`LibraryStore.cs`）
+- Avalonia XAML 依赖编译绑定（`x:DataType`），新增视图时不要漏写，否则 AOT 下会因反射绑定失效
+- 已有警告即视为失败：`dotnet publish` 输出应保持 0 警告 0 错误
 
 ## 与 Kotlin 版的对应关系
 
@@ -33,6 +49,13 @@ dotnet run --project desktop/src/HongguoTV.Desktop/HongguoTV.Desktop.csproj
 | `RemoteVideo.kt` + Media3 `VideoDataSource` | `RemoteVideo.cs` + `LocalMediaServer.cs` + LibVLC |
 
 签名层已用 Kotlin 仓库的四组 oracle 逐项校验一致：`signing.json`（12 行）、`signing-v5-carrier.json`（4 行）、`signing-v5-f13.json`（32 行）、`player-signing.json`（2 行）。
+
+## 应用图标
+
+- 图标文件：`desktop/src/HongguoTV.Desktop/Assets/app.ico`
+- `csproj` 的 `<ApplicationIcon>` 控制 **exe 文件图标**（资源管理器显示）
+- `MainWindow.axaml` 的 `Icon="/Assets/app.ico"` 控制 **窗口与任务栏图标**（项目已用 `AvaloniaResource` 嵌入）
+- 替换图标时同时保留这两种用途，并确保 `.ico` 含多尺寸（16/32/48/256）以获得清晰显示
 
 ## 已知边界
 
