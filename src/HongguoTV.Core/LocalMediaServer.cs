@@ -10,6 +10,9 @@ namespace HongguoTV.Core;
 /// </summary>
 public sealed class LocalMediaServer : IDisposable
 {
+    // 单次 Range 响应的最大字节数：块越小，播放器等待下一块的往返次数越多，容易卡顿。
+    private const int MaxBlock = 4 * 1024 * 1024;
+
     private readonly HttpListener _listener = new();
     private readonly ContentRepository _repository;
     private readonly Dictionary<string, RemoteVideo> _slots = new();
@@ -93,19 +96,26 @@ public sealed class LocalMediaServer : IDisposable
             else start = 0;
 
             if (video.Total <= 0) await video.PrepareAsync(_shutdown.Token);
-            var length = (end ?? Math.Min(start + 1024 * 1024 - 1, video.Total - 1)) - start + 1;
+            var length = (end ?? Math.Min(start + MaxBlock - 1, video.Total - 1)) - start + 1;
             if (start >= video.Total || length <= 0)
             {
                 response.StatusCode = 416;
                 response.Headers["Content-Range"] = $"bytes */{video.Total}";
                 return;
             }
-            var bytes = await video.ReadAsync(start, length, _shutdown.Token);
             response.ContentType = "video/mp4";
-            response.ContentLength64 = bytes.Length;
+            response.ContentLength64 = length;
             if (response.StatusCode == 206)
-                response.Headers["Content-Range"] = $"bytes {start}-{start + bytes.Length - 1}/{video.Total}";
-            await response.OutputStream.WriteAsync(bytes);
+                response.Headers["Content-Range"] = $"bytes {start}-{start + length - 1}/{video.Total}";
+            // 边下边发：不再等整段数据到齐才响应，播放器的缓冲不会被"块下载时间"掏空。
+            long written = 0;
+            await foreach (var chunk in video.ReadChunksAsync(start, length, _shutdown.Token))
+            {
+                await response.OutputStream.WriteAsync(chunk, _shutdown.Token);
+                await response.OutputStream.FlushAsync(_shutdown.Token);
+                written += chunk.Length;
+            }
+            if (written < length) throw new IOException("上游视频数据中断");
         }
         catch (Exception ex)
         {

@@ -297,7 +297,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         LibVLCSharp.Shared.Core.Initialize();
         _libVlc = new LibVLC(
             "--no-video-title-show",
-            "--network-caching=1500",
+            "--network-caching=4000",
             "--clock-jitter=0",
             "--clock-synchro=0",
             "--no-drop-late-frames",
