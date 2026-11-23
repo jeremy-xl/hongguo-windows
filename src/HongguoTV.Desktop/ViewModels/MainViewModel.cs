@@ -14,6 +14,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
     private LibVLC? _libVlc;
     private MediaPlayer? _player;
     private string? _currentMediaUrl;
+    private string? _currentSourceUrl;
     private EpisodeViewModel? _currentEpisode;
     private CancellationTokenSource _playbackLoad = new();
     private CancellationTokenSource _suggestionLoad = new();
@@ -216,13 +217,23 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
     public SeriesViewModel? Selected
     {
         get => _selected;
-        set { if (SetProperty(ref _selected, value) && value is not null) _ = LoadDetailAsync(value); }
+        set
+        {
+            if (!SetProperty(ref _selected, value) || value is null) return;
+            var resumeIndex = _pendingResumeIndex;
+            var resumeEpisodeId = _pendingResumeEpisodeId;
+            _pendingResumeIndex = null;
+            _pendingResumeEpisodeId = null;
+            _ = LoadDetailAsync(value, resumeIndex, resumeEpisodeId);
+        }
     }
 
     private int _homePage = 1;
     private int _searchPage = 1;
     private string _lastQuery = "";
     private Detail? _detail;
+    private int? _pendingResumeIndex;
+    private string? _pendingResumeEpisodeId;
 
     private void ShowHome() { Page = "home"; DetailOpen = false; }
     private void ShowSearch() { Page = "search"; DetailOpen = false; }
@@ -285,7 +296,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         catch (Exception e) { Status = $"搜索失败：{e.Message}"; }
     }
 
-    private async Task LoadDetailAsync(SeriesViewModel series)
+    private async Task LoadDetailAsync(SeriesViewModel series, int? resumeIndex = null, string? resumeEpisodeId = null)
     {
         try
         {
@@ -298,6 +309,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
             Badge = detail.Series.Badge;
             Tags = detail.Series.Tags;
             IsFavorite = _library.IsFavorite(detail.Series.Id);
+            EpisodeViewModel? resume = null;
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 Episodes.Clear();
@@ -313,8 +325,14 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
                     Episodes.Add(episode);
                 }
                 DetailOpen = true;
+                if (!string.IsNullOrWhiteSpace(resumeEpisodeId))
+                    resume = Episodes.FirstOrDefault(e => string.Equals(e.Id, resumeEpisodeId, StringComparison.Ordinal));
+                resume ??= resumeIndex.HasValue && resumeIndex.Value >= 0 && resumeIndex.Value < Episodes.Count
+                    ? Episodes[resumeIndex.Value]
+                    : null;
             });
             Status = $"共 {detail.Episodes.Count} 集";
+            if (resume is not null) _ = PlayEpisodeAsync(resume);
         }
         catch (Exception e) { Status = $"详情加载失败：{e.Message}"; }
     }
@@ -341,6 +359,11 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
     private void OnEpisodeEnded()
     {
         IsPlaying = false;
+        if (_currentSourceUrl?.Contains("/video/public/", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            Status = "官网仅提供 10 秒预览，完整播放暂不可用";
+            return;
+        }
         if (!AutoPlay || _currentEpisode is null) return;
         var index = Episodes.IndexOf(_currentEpisode);
         if (index < 0 || index + 1 >= Episodes.Count) return;
@@ -364,6 +387,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
             var url = _mediaServer.Mount(rendition.ToStreamInfo());
             if (!string.IsNullOrWhiteSpace(_currentMediaUrl)) _mediaServer.Unmount(_currentMediaUrl);
             _currentMediaUrl = url;
+            _currentSourceUrl = rendition.Url;
             Quality = rendition.Quality > 0 ? $"{rendition.Quality}P" : "自动";
             using var media = new Media(_libVlc!, new Uri(url));
             if (!UseGpuDecode) media.AddOption(":avcodec-hw=none");
@@ -372,7 +396,9 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
             PlayerVisible = true;
             foreach (var item in Episodes) item.Playing = false;
             episode.Playing = true;
-            Status = $"正在播放 {episode.Label} · {Quality}";
+            Status = _currentSourceUrl.Contains("/video/public/", StringComparison.OrdinalIgnoreCase)
+                ? $"正在播放 {episode.Label} · 官网 10 秒预览"
+                : $"正在播放 {episode.Label} · {Quality}";
             _library.SaveProgress(_detail, episode.Number - 1, DateTimeOffset.UtcNow.Ticks);
             _ = LoadLibraryAsync();
             _player.SetRate(Speed);
@@ -390,6 +416,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
     private void StopPlayback()
     {
         _currentEpisode = null;
+        _currentSourceUrl = null;
         _player?.Stop();
         if (!string.IsNullOrWhiteSpace(_currentMediaUrl)) _mediaServer.Unmount(_currentMediaUrl);
         _currentMediaUrl = null;
@@ -415,7 +442,11 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
             History.Clear();
             foreach (var h in _library.History)
                 History.Add(new HistoryViewModel(h, item =>
-                    Selected = new SeriesViewModel(item.Id, item.Title, item.Cover, "", "", _ => { })));
+                {
+                    _pendingResumeIndex = item.EpisodeIndex;
+                    _pendingResumeEpisodeId = item.EpisodeId;
+                    Selected = new SeriesViewModel(item.Id, item.Title, item.Cover, "", "", _ => { });
+                }));
         });
     }
 

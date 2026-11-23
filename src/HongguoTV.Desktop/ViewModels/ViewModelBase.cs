@@ -69,7 +69,7 @@ public sealed class HistoryViewModel : ViewModelBase
     public Core.HistoryItem Item { get; }
     public string Title => Item.Title;
     public string Cover => Item.Cover;
-    public string Progress => $"看到第 {Item.EpisodeIndex + 1} 集";
+    public string Progress => $"继续播放第 {Item.EpisodeIndex + 1} 集";
     public ICommand OpenCommand { get; }
 }
 
