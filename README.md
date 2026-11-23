@@ -31,13 +31,13 @@ dotnet run --project desktop/src/HongguoTV.Desktop/HongguoTV.Desktop.csproj
 
 ### Native AOT 发布
 
-项目已启用 `<PublishAot>true</PublishAot>`，可直接发布为原生 exe（无需目标机安装 .NET 运行时）：
+项目已启用 `<PublishAot>true</PublishAot>`，可直接发布为原生 exe（无需目标机安装 .NET 运行时）。**每次发布前必须先递增版本号再发布**，统一在仓库根目录执行发布脚本：
 
 ```powershell
-dotnet publish desktop/src/HongguoTV.Desktop/HongguoTV.Desktop.csproj -c Release -r win-x64
+./publish.ps1
 ```
 
-产物在 `bin/Release/net10.0/win-x64/publish/`：主程序约 24 MB 原生单文件，外加 `libvlc/win-x64`（约 106 MB，含 LibVLC 3.0.24 全量解码器插件）。项目只复制 x64 一套原生库（`csproj` 里的 `VlcWindowsX64Enabled` / `VlcWindowsX86Enabled` / `VlcWindowsArm64Enabled`），发布目录总计约 148 MB（不含 PDB）。需要其他架构时用 `-r win-x86` 或 `-r win-arm64` 发布，对应架构会自动启用。
+脚本会同步递增 `HongguoTV.Desktop.csproj` 的 `<Version>` 与 `app.manifest` 的 `assemblyIdentity version`（发布失败自动回滚），再执行 `dotnet publish -c Release -r win-x64 -p:PublishProfile=FolderProfile`。产物固定输出到 `src/HongguoTV.Desktop/bin/Release/net10.0/publish/`：主程序约 24 MB 原生单文件，外加 `libvlc/win-x64`（约 106 MB，含 LibVLC 3.0.24 全量解码器插件）。项目只复制 x64 一套原生库（`csproj` 里的 `VlcWindowsX64Enabled` / `VlcWindowsX86Enabled` / `VlcWindowsArm64Enabled`），发布目录总计约 148 MB（不含 PDB）。需要其他架构时修改脚本里的 `-r` 参数（发布目录不变），对应架构会自动启用。
 
 AOT 注意事项：
 - 发布机需要 C++ 工具链（MSVC linker），即已安装 Visual Studio Build Tools 的“使用 C++ 的桌面开发”组件

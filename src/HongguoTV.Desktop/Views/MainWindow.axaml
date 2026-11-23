@@ -5,9 +5,10 @@
         xmlns:views="using:HongguoTV.Desktop.Views"
         xmlns:vlc="clr-namespace:LibVLCSharp.Avalonia;assembly=LibVLCSharp.Avalonia"
         x:Class="HongguoTV.Desktop.Views.MainWindow"
+        x:Name="RootWindow"
         x:DataType="vm:MainViewModel"
         x:FieldModifier="public"
-        Title="红果 TV · Windows" Width="1280" Height="780" MinWidth="960" MinHeight="600"
+        Title="红果短剧 · Windows" Width="1280" Height="780" MinWidth="960" MinHeight="600"
         Icon="/Assets/app.ico"
         Background="#0E141D" Foreground="#E6EDF3"
         ExtendClientAreaToDecorationsHint="True"
@@ -213,7 +214,7 @@
                     <Grid RowDefinitions="*,Auto">
                         <vlc:VideoView x:Name="PlayerView" Grid.Row="0" />
                         <Border Grid.Row="1" Background="#141C27" Padding="10,8">
-                            <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,*,Auto,Auto">
+                            <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,*,Auto,Auto,Auto">
                                 <Button Grid.Column="0" Command="{Binding PlayPauseCommand}" Width="36" Height="30"
                                         ToolTip.Tip="播放 / 暂停">
                                     <Panel>
@@ -246,8 +247,13 @@
                                 <CheckBox Grid.Column="7" Content="自动连播" IsChecked="{Binding AutoPlay}"
                                           FontSize="11" Foreground="#B9C4D1" VerticalAlignment="Center" Margin="6,0,0,0" />
                                 <Button x:Name="FullScreenButton" Grid.Column="8" Click="FullScreenButton_Click"
-                                        Width="36" Height="30" Margin="6,0,0,0" ToolTip.Tip="播放器全屏（ESC 退出）">
+                                        Width="36" Height="30" Margin="6,0,0,0" ToolTip.Tip="窗口全屏：视频铺满窗口（ESC 退出）">
                                     <Path x:Name="FullScreenIcon" Data="{StaticResource IconFullscreen}"
+                                          Fill="#E6EDF3" Width="14" Height="14" Stretch="Uniform" />
+                                </Button>
+                                <Button x:Name="ScreenFullScreenButton" Grid.Column="9" Click="ScreenFullScreenButton_Click"
+                                        Width="36" Height="30" Margin="6,0,0,0" ToolTip.Tip="屏幕全屏：覆盖整个屏幕（ESC 退出）">
+                                    <Path x:Name="ScreenFullScreenIcon" Data="{StaticResource IconScreenFullscreen}"
                                           Fill="#E6EDF3" Width="14" Height="14" Stretch="Uniform" />
                                 </Button>
                             </Grid>
@@ -257,34 +263,57 @@
             </Grid>
         </Grid>
 
-        <!-- 设置对话框（应用内遮罩层） -->
-        <Border Grid.Row="0" Grid.RowSpan="3" ZIndex="100" Background="#B3000000"
-                IsVisible="{Binding SettingsOpen}">
-            <Border Background="#161F2B" BorderBrush="#2A3546" BorderThickness="1" CornerRadius="14"
-                    Width="460" Padding="26" VerticalAlignment="Center" HorizontalAlignment="Center">
-                <StackPanel Spacing="16">
-                    <TextBlock Text="设置" FontSize="18" FontWeight="Bold" />
-                    <Border Height="1" Background="#2A3546" />
-                    <TextBlock Text="视频解码" FontSize="13" Foreground="#8B98A9" />
-                    <RadioButton GroupName="DecodeMode" IsChecked="{Binding UseGpuDecode}" Foreground="#D8DEE9">
-                        <StackPanel Spacing="2">
-                            <TextBlock Text="GPU 硬件解码（D3D11VA）" FontSize="13" />
-                            <TextBlock Text="占用 CPU 少，默认选项。老显卡解 1080P HEVC 可能花屏或卡顿。"
-                                       FontSize="11" Foreground="#7D8B9B" TextWrapping="Wrap" />
-                        </StackPanel>
-                    </RadioButton>
-                    <RadioButton GroupName="DecodeMode" IsChecked="{Binding UseCpuDecode}" Foreground="#D8DEE9">
-                        <StackPanel Spacing="2">
-                            <TextBlock Text="CPU 软件解码" FontSize="13" />
-                            <TextBlock Text="兼容性最好，画面异常时改用它；高分辨率对 CPU 要求较高。"
-                                       FontSize="11" Foreground="#7D8B9B" TextWrapping="Wrap" />
-                        </StackPanel>
-                    </RadioButton>
-                    <TextBlock Text="解码方式在下一次开始播放时生效。" FontSize="11" Foreground="#5F6B7A" />
-                    <Button Content="完成" Command="{Binding CloseSettingsCommand}" Width="92"
-                            HorizontalAlignment="Right" Background="#E5484D" Foreground="#FFFFFF" />
-                </StackPanel>
+        <!-- 设置对话框：使用独立顶层 Popup，确保显示在播放器原生视频之上 -->
+        <Popup x:Name="SettingsPopup" IsOpen="{Binding SettingsOpen}" Placement="Center"
+               PlacementTarget="{Binding #RootWindow}" IsLightDismissEnabled="False"
+               KeyDown="SettingsPopup_KeyDown">
+            <Border Background="#B3000000"
+                    Width="{Binding #RootWindow.Bounds.Width}" Height="{Binding #RootWindow.Bounds.Height}">
+                <Border Background="#161F2B" BorderBrush="#2A3546" BorderThickness="1" CornerRadius="14"
+                        Width="460" Padding="26" VerticalAlignment="Center" HorizontalAlignment="Center">
+                    <StackPanel Spacing="16">
+                        <TextBlock Text="设置" FontSize="18" FontWeight="Bold" />
+                        <Border Height="1" Background="#2A3546" />
+                        <TextBlock Text="视频解码" FontSize="13" Foreground="#8B98A9" />
+                        <RadioButton GroupName="DecodeMode" IsChecked="{Binding UseGpuDecode}" Foreground="#D8DEE9">
+                            <StackPanel Spacing="2">
+                                <TextBlock Text="GPU 硬件解码（D3D11VA）" FontSize="13" />
+                                <TextBlock Text="占用 CPU 少，默认选项。老显卡解 1080P HEVC 可能花屏或卡顿。"
+                                           FontSize="11" Foreground="#7D8B9B" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </RadioButton>
+                        <RadioButton GroupName="DecodeMode" IsChecked="{Binding UseCpuDecode}" Foreground="#D8DEE9">
+                            <StackPanel Spacing="2">
+                                <TextBlock Text="CPU 软件解码" FontSize="13" />
+                                <TextBlock Text="兼容性最好，画面异常时改用它；高分辨率对 CPU 要求较高。"
+                                           FontSize="11" Foreground="#7D8B9B" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </RadioButton>
+                        <TextBlock Text="解码方式在下一次开始播放时生效。" FontSize="11" Foreground="#5F6B7A" />
+                        <TextBlock x:Name="VersionTextBlock" FontSize="11" Foreground="#7D8B9B" />
+                        <Button Content="完成" Command="{Binding CloseSettingsCommand}" Width="92"
+                                HorizontalAlignment="Right" Background="#E5484D" Foreground="#FFFFFF" />
+                    </StackPanel>
+                </Border>
             </Border>
-        </Border>
+        </Popup>
+
+        <!-- 无边框窗口的边缘拖动缩放命中区（最大化/全屏时隐藏） -->
+        <Border x:Name="ResizeTop" Grid.Row="0" Grid.RowSpan="3" Height="6" VerticalAlignment="Top"
+                HorizontalAlignment="Stretch" Background="Transparent" ZIndex="90" />
+        <Border x:Name="ResizeBottom" Grid.Row="0" Grid.RowSpan="3" Height="6" VerticalAlignment="Bottom"
+                HorizontalAlignment="Stretch" Background="Transparent" ZIndex="90" />
+        <Border x:Name="ResizeLeft" Grid.Row="0" Grid.RowSpan="3" Width="6" HorizontalAlignment="Left"
+                VerticalAlignment="Stretch" Background="Transparent" ZIndex="90" />
+        <Border x:Name="ResizeRight" Grid.Row="0" Grid.RowSpan="3" Width="6" HorizontalAlignment="Right"
+                VerticalAlignment="Stretch" Background="Transparent" ZIndex="90" />
+        <Border x:Name="ResizeTopLeft" Grid.Row="0" Grid.RowSpan="3" Width="12" Height="12"
+                HorizontalAlignment="Left" VerticalAlignment="Top" Background="Transparent" ZIndex="91" />
+        <Border x:Name="ResizeTopRight" Grid.Row="0" Grid.RowSpan="3" Width="12" Height="12"
+                HorizontalAlignment="Right" VerticalAlignment="Top" Background="Transparent" ZIndex="91" />
+        <Border x:Name="ResizeBottomLeft" Grid.Row="0" Grid.RowSpan="3" Width="12" Height="12"
+                HorizontalAlignment="Left" VerticalAlignment="Bottom" Background="Transparent" ZIndex="91" />
+        <Border x:Name="ResizeBottomRight" Grid.Row="0" Grid.RowSpan="3" Width="12" Height="12"
+                HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="Transparent" ZIndex="91" />
     </Grid>
 </Window>
