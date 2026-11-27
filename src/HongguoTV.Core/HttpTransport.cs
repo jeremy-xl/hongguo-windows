@@ -9,12 +9,12 @@ internal sealed class HttpTransport : IDisposable
     private readonly CookieContainer _cookies = new();
     private readonly HttpClientHandler _handler;
 
-    public HttpTransport(TimeSpan? timeout = null)
+    public HttpTransport(TimeSpan? timeout = null, bool useCookies = true)
     {
         _handler = new HttpClientHandler
         {
             CookieContainer = _cookies,
-            UseCookies = true,
+            UseCookies = useCookies,
             AllowAutoRedirect = true,
             MaxAutomaticRedirections = 5,
             AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,

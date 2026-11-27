@@ -5,6 +5,7 @@ internal static class V5Constants
     public static readonly byte[] Magic = Bytes.Hex("2d4b4fca49750d433fb5ae2c226dcc56");
     public const string License = "646637794";
     public static readonly byte[] SignKey = Bytes.Hex("b23c2a470a20d105dc3f8c4438f8272ed46d6c89ffdcdedd5108698d26e9489d");
+    public const int Field21 = 312;
 
     public static readonly byte[] Sbox = Bytes.Hex(
         "53290fe9e51f316f90f74a7e034d367784ab49237cd0135cdc632c322fd3be0e2624a417ecd9151a7ff64f60730a87f9445ec6ada2f865d22b696c4188f24c0d" +

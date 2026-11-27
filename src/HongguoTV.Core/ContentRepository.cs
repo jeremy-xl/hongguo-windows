@@ -8,6 +8,7 @@ namespace HongguoTV.Core;
 public sealed class ContentRepository : IDisposable
 {
     private const string Site = "https://hongguoduanju.com";
+    private const string CurrentAppModelHost = "reading.snssdk.com";
     private static readonly string[] PlaybackHosts =
     {
         "api5-normal-sinfonlineb.fqnovel.com",
@@ -16,6 +17,7 @@ public sealed class ContentRepository : IDisposable
     };
 
     private readonly HttpTransport _transport = new(TimeSpan.FromSeconds(25));
+    private readonly HttpTransport _playbackTransport = new(TimeSpan.FromSeconds(25), useCookies: false);
     private readonly HttpClient _mediaClient = new();
     private readonly Signer _signer = new();
     private readonly Signer _mobileV5Signer = new(mobileV5: true);
@@ -79,11 +81,31 @@ public sealed class ContentRepository : IDisposable
         if (!IsId(id)) throw new ArgumentException("剧集 ID 不合法");
         var data = ParseRouter((await _transport.GetTextAsync($"{Site}/detail?series_id={id}", ct: ct)).Text)["loaderData"]?.AsObject();
         var o = Json.Obj(Json.Obj(data, "detail_page"), "seriesDetail") ?? throw new ContentException("剧集详情暂不可用");
-        var raw = Json.Arr(o, "vid_list") ?? throw new ContentException("分集暂不可用");
-        var episodes = raw.Select(v => v?.ToString() ?? "").ToList();
-        if (episodes.Count == 0 || episodes.Any(v => !IsId(v)) || episodes.Distinct().Count() != episodes.Count)
-            throw new ContentException("分集数据异常");
+        var webEpisodes = EpisodeDirectory.FromWeb(o);
+        var episodes = webEpisodes is not null
+            ? webEpisodes
+            : await DirectoryEpisodesAsync(id, EpisodeDirectory.ExpectedCount(o), ct);
         return new Detail(Card(o) with { Id = id }, episodes);
+    }
+
+    private async Task<IReadOnlyList<string>> DirectoryEpisodesAsync(string id, int expectedCount, CancellationToken ct)
+    {
+        var hosts = new[] { "api5-normal-sinfonlinea.fqnovel.com", "api5-normal-sinfonlineb.fqnovel.com" };
+        foreach (var host in hosts)
+        {
+            var values = new Dictionary<string, string>(VendorConstants.Device)
+            {
+                ["book_id"] = id, ["need_version"] = "true",
+            };
+            var signed = _signer.Sign($"https://{host}/reading/bookapi/directory/all_items/v/", values);
+            try
+            {
+                var reply = await SendSignedAsync(signed, ct);
+                return EpisodeDirectory.Parse(reply.Text, expectedCount);
+            }
+            catch (Exception e) when (e is IOException or HttpRequestException or FormatException) { }
+        }
+        throw new ContentException("完整分集暂不可用，请稍后重试");
     }
 
     public async Task<StreamLadder> StreamLadderAsync(string episodeId, CancellationToken ct = default)
@@ -92,16 +114,25 @@ public sealed class ContentRepository : IDisposable
         var profile = await GetProfileAsync(ct);
         try
         {
-            return await MobileLadderAsync(episodeId, profile, "api5-normal-sinfonlinea.fqnovel.com", ct);
+            return await MobileLadderAsync(episodeId, profile, CurrentAppModelHost, ct);
         }
         catch (Exception e) when (e is IOException or HttpRequestException or FormatException or KeyNotFoundException)
         {
-            var model = await TabVideoModelAsync(episodeId, profile, ct);
-            if (model is not null)
+            try
             {
-                var rows = PlaybackModels.Renditions(model);
-                if (rows.Count > 0) return new StreamLadder(rows);
+                var model = await TabVideoModelAsync(episodeId, profile, ct);
+                if (model is not null)
+                {
+                    var rows = PlaybackModels.Renditions(model);
+                    if (rows.Count > 0) return new StreamLadder(rows);
+                }
             }
+            catch (Exception e2) when (e2 is IOException or HttpRequestException or FormatException or KeyNotFoundException) { }
+            try
+            {
+                return await MobileLadderAsync(episodeId, profile, "api5-normal-sinfonlineb.fqnovel.com", ct);
+            }
+            catch (Exception e3) when (e3 is IOException or HttpRequestException or FormatException or KeyNotFoundException) { }
             return await SingleVideoModelAsync(episodeId, profile, ct);
         }
     }
@@ -163,14 +194,16 @@ public sealed class ContentRepository : IDisposable
     {
         var values = new Dictionary<string, string>
         {
-            ["aid"] = "8662", ["app_name"] = "novelread", ["version_code"] = "74332", ["version_name"] = "7.4.3.32",
-            ["channel"] = "vivo_8662_64", ["device_platform"] = "android", ["device_type"] = "PGT-AN10",
-            ["os_version"] = "12", ["update_version_code"] = "74332",
+            ["aid"] = "8662", ["app_name"] = "novelread", ["version_code"] = "74532", ["version_name"] = "7.4.5.32",
+            ["update_version_code"] = "74532", ["manifest_version_code"] = "74532", ["os"] = "android", ["ssmix"] = "a",
+            ["channel"] = "update_64", ["device_platform"] = "android", ["device_type"] = "25053RT47C",
+            ["device_brand"] = "Redmi", ["os_version"] = "16", ["os_api"] = "36", ["ac"] = "wifi", ["language"] = "zh",
+            ["host_abi"] = "arm64-v8a",
             ["iid"] = profile.Values["iid"], ["cdid"] = profile.Values["cdid"], ["device_id"] = profile.Values["device_id"],
             ["_rticket"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString(),
         };
-        var url = $"https://{host}/novel/player/multi_video_model/player/v1";
-        var payload = $"{{\"biz_param\":{{\"detail_page_version\":0,\"device_level\":1,\"disable_digg_stat\":false,\"disable_video_relate_book\":false,\"need_all_video_definition\":true,\"need_mp4_align\":false,\"use_os_player\":false,\"use_server_dns\":false,\"video_platform\":1024}},\"mixed_video_id_map\":{{\"1004\":[\"{id}\"]}},\"dr_scene\":\"player\"}}";
+        var url = $"https://{host}/novel/player/multi_video_model/preload/v1";
+        var payload = $"{{\"biz_param\":{{\"detail_page_version\":0,\"device_level\":4,\"disable_digg_stat\":false,\"disable_video_relate_book\":false,\"need_all_video_definition\":true,\"need_mp4_align\":false,\"use_os_player\":false,\"use_server_dns\":false,\"video_platform\":1024}},\"mixed_video_id_map\":{{\"1004\":[\"{id}\"]}},\"dr_scene\":\"preload\"}}";
         using var compressed = new MemoryStream();
         using (var gzip = new System.IO.Compression.GZipStream(compressed, System.IO.Compression.CompressionLevel.Optimal, true))
             gzip.Write(Encoding.UTF8.GetBytes(payload));
@@ -178,39 +211,56 @@ public sealed class ContentRepository : IDisposable
         var signed = _mobileV5Signer.SignPlayback(url, values, body);
         var headers = new List<KeyValuePair<string, string>>(signed.Headers)
         {
-            new("User-Agent", "com.phoenix.read/73932 (Linux; U; Android 12; zh_CN_#Hans; PGT-AN10; Build/V417IR;tt-ok/3.12.13.20)"),
+            new("User-Agent", "okhttp/4.12.0"),
             new("Accept", "application/json"),
             new("Content-Encoding", "gzip"),
             new("x-ss-stub", Bytes.HexString(Bytes.Md5(body)).ToUpperInvariant()),
         };
-        var reply = await SendSignedAsync(signed, ct, headers, hasBody: true);
+        var reply = await SendSignedAsync(signed, ct, headers, hasBody: true, _playbackTransport);
+        if (string.IsNullOrWhiteSpace(reply.Text)) throw new ContentException("播放信息为空（mobile-model=200/0B）");
         var root = Json.Parse(reply.Text) ?? throw new ContentException("播放信息格式异常");
         CheckStatus(root);
         var data = Json.Obj(root, "data") ?? throw new ContentException("播放信息为空");
         var entries = Json.Obj(data, "1004") ?? data;
-        var model = Json.Obj(Json.Obj(entries, id)?["video_model"])
+        var raw = Json.Obj(entries, id)?["video_model"];
+        var rawText = raw is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
+        var model = Json.Obj(raw) ?? Json.Parse(rawText)
             ?? throw new ContentException("没有可播放的视频");
         var rows = PlaybackModels.Renditions(model);
+        if (rows.Count == 0)
+        {
+            var fallback = PlaybackModels.Fallback(model);
+            if (fallback is not null) return await CompatibleLadderAsync(fallback, ct);
+        }
         if (rows.Count == 0) throw new ContentException("没有可播放的视频");
         return new StreamLadder(rows);
     }
 
     private async Task<JsonObject?> TabVideoModelAsync(string id, PlaybackProfile profile, CancellationToken ct)
     {
-        var extra = new Dictionary<string, string>
+        var values = new Dictionary<string, string>
         {
+            ["aid"] = "8662", ["app_name"] = "novelread", ["version_code"] = "74532", ["version_name"] = "7.4.5.32",
+            ["update_version_code"] = "74532", ["manifest_version_code"] = "74532", ["os"] = "android", ["ssmix"] = "a",
+            ["channel"] = "update_64", ["device_platform"] = "android", ["device_type"] = "25053RT47C",
+            ["device_brand"] = "Redmi", ["os_version"] = "16", ["os_api"] = "36", ["ac"] = "wifi", ["language"] = "zh",
+            ["host_abi"] = "arm64-v8a",
+            ["iid"] = profile.Values["iid"], ["cdid"] = profile.Values["cdid"], ["device_id"] = profile.Values["device_id"],
             ["video_id"] = id, ["video_id_type"] = "0", ["device_level"] = "1",
             ["need_all_video_definition"] = "1", ["need_mp4_align"] = "0", ["use_os_player"] = "0",
             ["video_platform"] = "1024", ["source"] = "0", ["from_video_id"] = "",
+            ["_rticket"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString(),
         };
-        var values = profile.Values.Concat(extra).GroupBy(p => p.Key).ToDictionary(g => g.Key, g => g.Last().Value);
         var signed = _playerV5Signer.SignPlayback(
             $"https://{PlaybackHosts[0]}/reading/bookapi/video_tab/multi_video_model/v1/", values, Array.Empty<byte>());
-        var headers = new List<KeyValuePair<string, string>>(signed.Headers)
+        var headers = new List<KeyValuePair<string, string>>(signed.Headers
+            .Where(h => h.Key is not ("x-ss-stub" or "Content-Type" or "Content-Encoding")))
         {
-            new("User-Agent", VendorConstants.PlayerUa), new("Accept", "application/json; charset=utf-8"),
+            new("User-Agent", "com.phoenix.read/73932 (Linux; U; Android 16; zh_CN; 25053RT47C; Build/BP2A.250605.031.A3; Cronet/TTNetVersion:04657795 2026-01-23 QuicVersion:c67e9834 2025-09-08)"),
+            new("Accept", "application/json; charset=utf-8"),
+            new("Accept-Language", "zh-CN,zh;q=0.9"),
         };
-        var reply = await SendSignedAsync(signed, ct, headers);
+        var reply = await SendSignedAsync(signed, ct, headers, transport: _playbackTransport);
         var root = Json.Parse(reply.Text);
         if (Json.Int(root, "Code", Json.Int(root, "code", 0)) != 0) return null;
         var data = Json.Obj(root, "data");
@@ -256,8 +306,9 @@ public sealed class ContentRepository : IDisposable
     }
 
     private async Task<(string Text, HttpStatusCode Status)> SendSignedAsync(Signer.Request request, CancellationToken ct,
-        IEnumerable<KeyValuePair<string, string>>? extraHeaders = null, bool hasBody = false)
+        IEnumerable<KeyValuePair<string, string>>? extraHeaders = null, bool hasBody = false, HttpTransport? transport = null)
     {
+        var client = transport ?? _transport;
         var headers = request.Headers.ToList();
         if (extraHeaders is not null)
         {
@@ -268,11 +319,29 @@ public sealed class ContentRepository : IDisposable
             }
         }
         var result = hasBody
-            ? await _transport.SendAsync(request.Body is null ? HttpMethod.Get : HttpMethod.Post, request.Url,
+            ? await client.SendAsync(request.Body is null ? HttpMethod.Get : HttpMethod.Post, request.Url,
                 headers, request.Body, ct: ct)
-            : await _transport.GetTextAsync(request.Url, headers, ct);
+            : await client.GetTextAsync(request.Url, headers, ct);
         if (result.Status == HttpStatusCode.ServiceUnavailable) throw new ContentException("播放服务繁忙，请稍后重试");
         return (result.Text, result.Status);
+    }
+
+    private async Task<StreamLadder> CompatibleLadderAsync(string endpoint, CancellationToken ct)
+    {
+        foreach (var codec in new[] { "1", "3" })
+        {
+            var separator = endpoint.Contains('?') ? '&' : '?';
+            var url = $"{endpoint}{separator}codec_type={codec}";
+            var reply = await _playbackTransport.GetTextAsync(url,
+                new[] { new KeyValuePair<string, string>("Accept", "application/json") }, ct);
+            if (string.IsNullOrWhiteSpace(reply.Text)) continue;
+            var root = Json.Parse(reply.Text);
+            var data = Json.Obj(Json.Obj(root, "video_info"), "data");
+            if (data is null) continue;
+            var rows = PlaybackModels.Renditions(data);
+            if (rows.Count > 0) return new StreamLadder(rows);
+        }
+        throw new ContentException("没有可播放的视频");
     }
 
     private async Task<PlaybackProfile> GetProfileAsync(CancellationToken ct)
@@ -361,12 +430,68 @@ public sealed class ContentRepository : IDisposable
     public void Dispose()
     {
         _transport.Dispose();
+        _playbackTransport.Dispose();
         _mediaClient.Dispose();
     }
 }
 
+internal static class EpisodeDirectory
+{
+    private static readonly System.Text.RegularExpressions.Regex NumericId =
+        new("^[0-9]{1,30}$", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    public static int ExpectedCount(JsonObject detail) => Math.Max(0,
+        Math.Max(Json.Int(detail, "episode_cnt"), Json.Int(Json.Obj(detail, "series_episode_info"), "episode_cnt")));
+
+    public static IReadOnlyList<string>? FromWeb(JsonObject detail)
+    {
+        var rows = Json.Arr(detail, "vid_list");
+        if (rows is null) return null;
+        var ids = rows.Select(v => v?.ToString() ?? "").ToList();
+        return Valid(ids, ExpectedCount(detail)) ? ids : null;
+    }
+
+    public static IReadOnlyList<string> Parse(string body, int expectedCount)
+    {
+        var root = Json.Parse(body) ?? throw new ContentException("完整分集响应格式异常");
+        var success = root["code"] is not null ? Json.Int(root, "code", -1) == 0
+            : root["Code"] is not null ? Json.Int(root, "Code", -1) == 0
+            : string.Equals(Json.Str(root, "message"), "SUCCESS", StringComparison.OrdinalIgnoreCase);
+        if (!success) throw new ContentException("完整分集接口暂不可用");
+        var rows = Json.Arr(Json.Obj(root, "data"), "item_data_list");
+        var ids = Json.Objects(rows).Select(row => Json.Str(row, "item_id")).ToList();
+        if (!Valid(ids, expectedCount)) throw new ContentException("完整分集数据缺失或异常");
+        return ids;
+    }
+
+    private static bool Valid(IReadOnlyList<string> ids, int expectedCount) =>
+        ids.Count > 0 && ids.Count >= expectedCount && ids.All(v => NumericId.IsMatch(v)) &&
+        ids.Distinct().Count() == ids.Count;
+}
+
 internal static class PlaybackModels
 {
+    public static string? Fallback(JsonObject model)
+    {
+        var candidates = new List<string>();
+        var node = model["fallback_api"];
+        if (node is JsonValue value && value.TryGetValue<string>(out var text)) candidates.Add(text);
+        if (node is JsonObject obj)
+        {
+            candidates.Add(Json.Str(obj, "url"));
+            candidates.Add(Json.Str(obj, "api"));
+        }
+        if (node is JsonArray array)
+            foreach (var item in array)
+                if (item is JsonValue itemValue && itemValue.TryGetValue<string>(out var itemText)) candidates.Add(itemText);
+        foreach (var raw in candidates)
+        {
+            var url = Json.CleanUrl(raw);
+            if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme == "https" && uri.UserInfo.Length == 0) return url;
+        }
+        return null;
+    }
+
     public static IReadOnlyList<Rendition> Renditions(JsonObject model)
     {
         var list = model["video_list"];

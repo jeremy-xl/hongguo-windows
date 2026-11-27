@@ -12,20 +12,31 @@ internal sealed class Signer
     private readonly Dictionary<string, string> _device;
     private readonly Func<double> _random;
     private readonly string _processNonce;
+    private readonly string _deviceToken;
     private readonly bool _mobileV5;
     private readonly long _processStarted;
 
     public Signer(Func<long>? clock = null, Dictionary<string, string>? device = null,
-        Func<double>? random = null, bool mobileV5 = false)
+        Func<double>? random = null, string? processNonce = null, bool mobileV5 = false)
     {
         _clock = clock ?? (() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
         _device = device ?? VendorConstants.Device;
         _random = random ?? Random.Shared.NextDouble;
         _mobileV5 = mobileV5;
         _processStarted = _clock();
-        var nonce = new byte[18];
-        RandomNumberGenerator.Fill(nonce);
-        _processNonce = Convert.ToBase64String(nonce).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        if (processNonce is not null)
+        {
+            _processNonce = processNonce;
+        }
+        else
+        {
+            var nonce = new byte[18];
+            RandomNumberGenerator.Fill(nonce);
+            _processNonce = Convert.ToBase64String(nonce).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        }
+        _deviceToken = _processNonce.Length == 25 && _processNonce.StartsWith('A')
+            ? _processNonce
+            : "A" + (_processNonce + "AAAAAAAAAAAAAAAAAAAAAAAA").Substring(0, 24);
     }
 
     private int Rand() => unchecked((int)(long)(_random() * 4294967296.0));
@@ -270,7 +281,7 @@ internal sealed class Signer
             F(4, "8662"), F(5, who["device_id"]), F(6, "1588093228"), F(7, version),
             F(8, "v04.06.04-ml-android"), F(9, 67503104, "sint"), F(10, Bytes.Hex("4001000000000000")),
             F(12, ts, "sint"), F(13, queryBodyTs), F(14, querySm3[..6]), F(15, nested), F(16, _processNonce),
-            F(17, ts, "sint"), F(19, queryHash), F(20, "none"), F(21, 312, "sint"), F(23, env),
+            F(17, ts, "sint"), F(19, queryHash), F(20, "none"), F(21, V5Constants.Field21, "sint"), F(23, env),
             F(24, "{\"cmr\":16777216,\"cmr2\":16777216,\"un_h\":1879194040,\"vpn\":0,\"kd\":0,\"fkd\":3672518972,\"pd\":-1872573247,\"dyn\":\"\",\"do\":0,\"tk\":true}"));
         var r = Rand();
         var signKey = Bytes.Hex("8ebdfa3806ecc5cee79423e6029ed82540bc2218bb7eaef71cb691f7aa8aa2f5");
@@ -293,20 +304,33 @@ internal sealed class Signer
     {
         var query = Bytes.Sm3(System.Text.Encoding.UTF8.GetBytes(url[(url.IndexOf('?') + 1)..]));
         var f13 = HashF13(query, body is null ? new byte[16] : Bytes.Md5(body), ts);
-        var flags = new byte[8];
+        var flags = Bytes.Hex("4480000000000000");
         var version = who["version_name"];
+        var brand = who.TryGetValue("device_brand", out var value) && value.Length > 0 ? value : "HONOR";
+        var type = who["device_type"];
+        var envLaunch = (int)(_random() * 21) + 100;
+        var envPid = (int)(_random() * 2000) + 10001;
         var deviceInfo = Proto(
-            F(1, 1, "sint"), F(2, 2, "sint"), F(3, "8662"), F(4, who["device_id"]), F(5, _processNonce),
-            F(6, "!noperm!"), F(12, "Asia/Shanghai,8"), F(13, "zh_CN"), F(22, who["os_version"]),
-            F(25, _processStarted, "sint"), F(30, who["device_type"]), F(31, "HONOR"),
-            F(32, who["device_type"]), F(34, "HONOR"));
-        var env = Proto(F(6, "v04.10.03.04-bugfix"), F(8, who["channel"]), F(12, deviceInfo), F(14, version));
+            F(1, 1, "sint"), F(2, 2, "sint"), F(3, "8662"), F(4, who["device_id"]), F(5, _deviceToken),
+            F(6, "!noperm!"), F(7, -888888, "sint"), F(8, -888888, "sint"), F(9, 3, "sint"),
+            F(10, -888888, "sint"), F(11, "!notset!"), F(12, "Asia/Shanghai,8"), F(13, "zh_CN"),
+            F(14, 4, "sint"), F(16, 0f, "float"), F(17, 0f, "float"), F(18, 0f, "float"),
+            F(19, 0f, "float"), F(20, 0f, "float"), F(21, 0f, "float"), F(22, who["os_version"]),
+            F(23, 41, "sint"), F(24, 36, "sint"), F(25, _processStarted, "sint"),
+            F(26, _processStarted, "sint"), F(27, _processStarted, "sint"), F(28, _clock(), "sint"),
+            F(29, -1, "sint"), F(30, type), F(31, brand), F(32, type), F(33, type), F(34, brand),
+            F(35, brand), F(36, brand), F(38, 31, "sint"));
+        var env = Proto(
+            F(1, envLaunch, "sint"), F(2, 247235599, "sint"), F(3, 247235596, "sint"), F(5, 7, "sint"),
+            F(6, "v04.10.03.04-bugfix"), F(7, envPid, "sint"), F(8, who["channel"]), F(12, deviceInfo),
+            F(13, Proto(F(1, ts, "sint"), F(2, -2, "sint"), F(4, 200, "sint"))), F(14, version));
         var message = Proto(
             F(1, V5Constants.Magic), F(2, 5, "sint"), F(3, Unsigned(Rand()), "sint"), F(4, "8662"),
             F(5, who["device_id"]), F(6, V5Constants.License), F(7, version), F(8, "v04.10.03-ml-android"),
             F(9, 0x040a0300, "sint"), F(10, flags), F(12, ts, "sint"), F(13, f13), F(14, query[..6]),
-            F(15, Proto(F(1, 1, "sint"), F(2, 1, "sint"), F(3, 1, "sint"), F(5, 1, "sint"))),
-            F(17, ts, "sint"), F(20, "none"), F(21, 377, "sint"), F(23, env),
+            F(15, Proto(F(1, 305, "sint"), F(2, 4, "sint"), F(3, 694367, "sint"), F(5, 1621072674, "sint"))),
+            F(16, _deviceToken), F(17, ts, "sint"), F(20, "none"), F(21, V5Constants.Field21, "sint"),
+            F(23, env),
             F(24, "{\"cmr\":16777216,\"cmr2\":16777216,\"un_h\":11,\"vpn\":0,\"kd\":0,\"dyn\":\"\",\"do\":1,\"tk\":true}"));
         var nonce = Rand();
         var key = V5Constants.SignKey;
@@ -425,7 +449,11 @@ internal sealed class Signer
         for (var offset = 0; offset < 1024; offset++)
         {
             var ticket = clock + offset;
-            var query = Bytes.EncodeValues(values.Append(new("_rticket", ticket.ToString(CultureInfo.InvariantCulture))));
+            var signedValues = new Dictionary<string, string>(values)
+            {
+                ["_rticket"] = ticket.ToString(CultureInfo.InvariantCulture),
+            };
+            var query = Bytes.EncodeValues(signedValues);
             if (Branch(query, body, ts) != 0) continue;
             var url = $"{baseUrl}?{query}";
             var headers = new Dictionary<string, string>
